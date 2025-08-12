@@ -205,6 +205,7 @@ private:
     bool m_ownClipboard[kClipboardEnd];
     bool m_sentClipboard[kClipboardEnd];
     IClipboard::Time m_timeClipboard[kClipboardEnd];
+    std::size_t m_hashClipboard[kClipboardEnd];
     std::string m_dataClipboard[kClipboardEnd];
     IEventQueue* m_events;
     std::size_t m_expectedFileSize;
