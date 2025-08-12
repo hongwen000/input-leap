@@ -279,8 +279,9 @@ private:
     // the main loop's thread id
     DWORD m_threadID;
 
-    // timer for periodically checking stuff that requires polling
+    // timers for periodically checking stuff that requires polling
     EventQueueTimer* m_fixTimer;
+    EventQueueTimer* m_clipboardTimer;
 
     // the keyboard layout to use when off primary screen
     HKL m_keyLayout;

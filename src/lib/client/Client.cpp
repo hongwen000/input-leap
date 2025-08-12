@@ -46,6 +46,8 @@
 #include <sstream>
 #include <stdexcept>
 #include <fstream>
+#include <algorithm>
+#include <functional>
 
 namespace inputleap {
 
@@ -87,6 +89,13 @@ Client::Client(IEventQueue* events, const std::string& name, const NetworkAddres
                               [this](const auto& e){ handle_file_chunk_sending(e); });
         m_events->add_handler(EventType::FILE_RECEIVE_COMPLETED, this,
                               [this](const auto& e){ handle_file_receive_completed(e); });
+    }
+
+    std::fill(std::begin(m_hashClipboard), std::end(m_hashClipboard), 0);
+
+    if (const char* env = std::getenv("INPUTLEAP_CLIPBOARD_MAX")) {
+        m_maximumClipboardSize = std::strtoul(env, nullptr, 10);
+        LOG_DEBUG("Using clipboard max size from env: %zu", m_maximumClipboardSize);
     }
 }
 
@@ -388,14 +397,19 @@ Client::sendClipboard(ClipboardID id)
     }
     m_screen->getClipboard(id, &clipboard);
 
-    // check time
-    if (m_timeClipboard[id] == 0 ||
-        clipboard.getTime() != m_timeClipboard[id]) {
-        // save new time
-        m_timeClipboard[id] = clipboard.getTime();
+    std::string data = clipboard.marshall();
+    std::size_t hash = std::hash<std::string>{}(data);
 
-        // marshall the data
-        std::string data = clipboard.marshall();
+    if (m_timeClipboard[id] == 0 ||
+        clipboard.getTime() != m_timeClipboard[id] ||
+        hash != m_hashClipboard[id]) {
+        if (clipboard.getTime() == m_timeClipboard[id] && hash != m_hashClipboard[id]) {
+            LOG_DEBUG("clipboard changed but timestamp unchanged; forcing update");
+        }
+
+        m_timeClipboard[id] = clipboard.getTime();
+        m_hashClipboard[id] = hash;
+
         if (data.size() >= m_maximumClipboardSize) {
             LOG_NOTE("Skipping clipboard transfer because the clipboard"
                 " contents exceeds the %zi MB size limit set by the server",
@@ -403,7 +417,6 @@ Client::sendClipboard(ClipboardID id)
             return;
         }
 
-        // save and send data if different or not yet sent
         if (!m_sentClipboard[id] || data != m_dataClipboard[id]) {
             m_sentClipboard[id] = true;
             m_dataClipboard[id] = data;
@@ -561,6 +574,7 @@ Client::handle_connected()
         m_ownClipboard[id]  = false;
         m_sentClipboard[id] = false;
         m_timeClipboard[id] = 0;
+        m_hashClipboard[id] = 0;
     }
 }
 
@@ -624,6 +638,7 @@ void Client::handle_clipboard_grabbed(const Event& event)
     m_ownClipboard[info.m_id]  = true;
     m_sentClipboard[info.m_id] = false;
     m_timeClipboard[info.m_id] = 0;
+    m_hashClipboard[info.m_id] = 0;
 
     // if we're not the active screen then send the clipboard now,
     // otherwise we'll wait until we leave.

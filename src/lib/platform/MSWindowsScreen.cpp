@@ -104,6 +104,7 @@ MSWindowsScreen::MSWindowsScreen(
     m_mark(0),
     m_markReceived(0),
     m_fixTimer(nullptr),
+    m_clipboardTimer(nullptr),
     m_keyLayout(nullptr),
     m_screensaver(nullptr),
     m_screensaverNotify(false),
@@ -210,6 +211,10 @@ MSWindowsScreen::enable()
     m_events->add_handler(EventType::TIMER, m_fixTimer,
                           [this](const auto& e){ handle_fixes(); });
 
+    m_clipboardTimer = m_events->newTimer(1.0, nullptr);
+    m_events->add_handler(EventType::TIMER, m_clipboardTimer,
+                          [this](const auto& e){ checkClipboards(); });
+
     // install our clipboard snooper
     m_nextClipboardWindow = SetClipboardViewer(m_window);
 
@@ -262,6 +267,12 @@ MSWindowsScreen::disable()
         m_events->remove_handler(EventType::TIMER, m_fixTimer);
         m_events->deleteTimer(m_fixTimer);
         m_fixTimer = nullptr;
+    }
+
+    if (m_clipboardTimer != nullptr) {
+        m_events->remove_handler(EventType::TIMER, m_clipboardTimer);
+        m_events->deleteTimer(m_clipboardTimer);
+        m_clipboardTimer = nullptr;
     }
 
     m_isOnScreen = m_isPrimary;
